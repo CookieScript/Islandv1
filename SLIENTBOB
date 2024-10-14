@@ -1,0 +1,278 @@
+getgenv().island = {
+    SilentEnabled = true,
+    SilentPrediction = 0.15781912,
+    RainbowHighlight = true,
+    antiGroundShots = false,
+    groundShotsValue = 0.5,
+    AutoPred = false,
+    ClosestPart = true,
+    JumpOffset = 0.065,
+    FallOffset = -0.001, -- Auto if you use auto pred
+    Resolver = true, -- Resolves everything that legit aim can
+    FOV = {
+        Visible = true,
+        Filled = false,
+        Transparency = 0,
+        Size = 25,
+        Thickness = 0.1,
+        Color = Color3.fromRGB(186, 181, 255),
+        Outline = false,
+        OutlineColor = Color3.fromRGB(0, 0, 0),
+        OutlineThickness = 0.1
+    },
+}
+
+local island = getgenv().island
+
+local Circle = Drawing.new("Circle")
+Circle.Radius = island.FOV.Size
+Circle.Filled = island.FOV.Filled
+Circle.Visible = island.FOV.Visible
+Circle.Transparency = island.FOV.Transparency
+Circle.Color = island.FOV.Color
+Circle.Thickness = island.FOV.Thickness
+
+local outline = Drawing.new("Circle")
+outline.Thickness = island.FOV.OutlineThickness
+outline.Radius = island.FOV.Size
+outline.Filled = false
+outline.Visible = island.FOV.Outline
+outline.ZIndex = 999
+outline.Transparency = 1
+outline.Color = island.FOV.OutlineColor
+
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+local GuiService = game:GetService("GuiService")
+local Client = Players.LocalPlayer
+local Character = Client.Character
+local Mouse = Client:GetMouse()
+local Camera = workspace.CurrentCamera
+
+local SilentTarget = nil
+local Highlight = nil
+
+local ClosestParts = {"Head", "UpperTorso", "HumanoidRootPart", "LowerTorso", "LeftHand", "RightHand", "LeftLowerArm", "RightLowerArm", "LeftUpperArm", "RightUpperArm", "LeftFoot", "LeftLowerLeg", "LeftUpperLeg", "RightLowerLeg", "RightFoot", "RightUpperLeg"}
+
+local function GetClosestToMouse()
+    local Target, Closest = nil, math.huge
+
+    for _, v in pairs(Players:GetPlayers()) do
+        if v.Character and v ~= Client then
+            for _, partName in ipairs(ClosestParts) do
+                local part = v.Character:FindFirstChild(partName)
+                if part then
+                    local Position, OnScreen = Camera:WorldToScreenPoint(part.Position)
+                    local Distance = (Vector2.new(Position.X, Position.Y) - Vector2.new(Mouse.X, Mouse.Y)).Magnitude
+
+                    if Circle.Radius > Distance and Distance < Closest and OnScreen then
+                        Closest = Distance
+                        Target = v
+                        if island.ClosestPart then
+                            island.HitPart = partName
+                        end
+                    end
+                end
+            end
+        end
+    end
+    return Target
+end
+
+local function UpdateDrawings()
+    Circle.Position = Vector2.new(Mouse.X, Mouse.Y + GuiService:GetGuiInset().Y)
+    outline.Position = Vector2.new(Mouse.X, Mouse.Y + GuiService:GetGuiInset().Y)
+end
+
+local function get_calculated_velocity(obj)
+    if obj and obj.Character and obj.Character:FindFirstChild(island.HitPart) then
+        local root = obj.Character.HumanoidRootPart
+        local currentPosition = root.Position
+        local currentTime = tick()
+
+        wait(0.1)
+
+        local newPosition = root.Position
+        local newTime = tick()
+
+        local distanceTraveled = newPosition - currentPosition
+        local timeInterval = newTime - currentTime
+        local velocity = distanceTraveled / timeInterval
+        return velocity
+    end
+    return Vector3.new(0, 0, 0)
+end
+
+local function calculatePosition(victim, velocity)
+    local prediction = island.SilentPrediction
+    local newYVelocity = velocity.Y + (prediction * 1)
+    local jumpOffset = Vector3.new(0, Xaco.JumpOffset, 0)
+    local fallOffset = Vector3.new(0, Xaco.FallOffset, 0)
+    local pos
+
+    if island.antiGroundShots then
+        pos = Vector3.new(
+            victim.Position.X,
+            victim.Position.Y,
+            victim.Position.Z
+        ) + Vector3.new(
+            velocity.X,
+            newYVelocity * Xaco.groundShotsValue,
+            velocity.Z
+        ) * prediction
+    else
+        pos = Vector3.new(
+            victim.Position.X,
+            victim.Position.Y,
+            victim.Position.Z
+        ) + Vector3.new(
+            velocity.X,
+            newYVelocity,
+            velocity.Z
+        ) * prediction
+    end
+
+    if newYVelocity > 0 then
+        pos = pos + jumpOffset
+    elseif newYVelocity < 0 then
+        pos = pos + fallOffset
+    end
+
+    return pos
+end
+
+local hue = 0
+local function UpdateRainbowHighlight()
+    if island.RainbowHighlight and SilentTarget then
+        hue = hue + 0.01
+        if hue > 1 then hue = 0 end
+        local color = Color3.fromHSV(hue, 1, 1)
+
+        if not Highlight then
+            Highlight = Instance.new("Highlight")
+            Highlight.Parent = SilentTarget.Character
+            Highlight.Adornee = SilentTarget.Character
+        end
+
+        Highlight.FillColor = color
+        Highlight.OutlineColor = color
+    elseif Highlight then
+        Highlight:Destroy()
+        Highlight = nil
+    end
+end
+
+local function calculateVelocity(initialPos, finalPos, timeInterval)
+    local displacement = finalPos - initialPos
+    local velocity = displacement / timeInterval
+    return velocity
+end
+
+RunService.RenderStepped:Connect(function(deltaTime)
+    UpdateDrawings()
+    local closestPlayer = GetClosestToMouse()
+
+    if SilentTarget ~= closestPlayer then
+        if Highlight then
+            Highlight:Destroy()
+            Highlight = nil
+        end
+        SilentTarget = closestPlayer
+    end
+
+    UpdateRainbowHighlight()
+
+    if island.AutoPred then
+        local pingValue = game:GetService("Stats").Network.ServerStatsItem["Data Ping"]:GetValueString()
+        local split = string.split(pingValue, '(')
+        local ping = tonumber(split[1])
+
+        if ping then
+            if ping < 30 then
+                island.SilentPrediction = 0.1130
+                island.FallOffset = -0.1130
+            elseif ping < 40 then
+                island.SilentPrediction = 0.13544
+                island.FallOffset = -0.13544
+            elseif ping < 50 then
+                island.SilentPrediction = 0.13575
+                island.FallOffset = -0.13575
+            elseif ping < 60 then
+                island.SilentPrediction = 0.13598
+                island.FallOffset = -0.13598
+            elseif ping < 70 then
+                island.SilentPrediction = 0.13892
+                island.FallOffset = -0.13892
+            elseif ping < 80 then
+                island.SilentPrediction = 0.1403
+                island.FallOffset = -0.1403
+            elseif ping < 90 then
+                island.SilentPrediction = 0.1446
+                island.FallOffset = -0.1446
+            elseif ping < 100 then
+                island.SilentPrediction = 0.1475
+                island.FallOffset = -0.1475
+            elseif ping < 110 then
+                island.SilentPrediction = 0.1502
+                island.FallOffset = -0.1502
+            end
+        end
+    end)
+    local oldpos
+    local function RecalVel(player, delta)
+        if player and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+            local currentPosition = player.Character.HumanoidRootPart.Position
+            local velocity
+            if oldpos then
+                velocity = (currentPosition -oldpos) / delta
+                oldpos = currentPosition
+            else
+                oldpos = currentPosition
+            end
+            return velocity
+        end
+    end
+    if SilentTarget and island.Resolver then
+        RecalVel(SilentTarget, deltaTime)
+    end
+end)
+
+local Argument = ""
+local MainEvent = nil
+if game.PlaceId == 2788229376 or game.PlaceId == 7213786345 then
+    Argument = "UpdateMousePosI"
+    MainEvent = game:GetService("ReplicatedStorage").MainEvent
+elseif game.PlaceId == 9825515356 then
+    Argument = "MousePosUpdate"
+    MainEvent = game:GetService("ReplicatedStorage").MainEvent 
+elseif game.PlaceId == 5602055394 or game.PlaceId == 7951883376 then
+    Argument = "MousePos"
+    MainEvent = game:GetService("ReplicatedStorage").Bullets
+elseif game.PlaceId == 17403265390 then
+    Argument = "MOUSE"
+    MainEvent = game:GetService("ReplicatedStorage").MAINEVENT
+else
+    Argument = "UpdateMousePos"
+    MainEvent = game:GetService("ReplicatedStorage").MainEvent
+end
+
+local function CharAdded()
+    Character.ChildAdded:Connect(function(tool)
+        if tool:IsA("Tool") then
+            tool.Activated:Connect(function()
+                if SilentTarget and island.SilentEnabled then
+                    local predictedPos = calculatePosition(SilentTarget.Character[island.HitPart], SilentTarget.Character[island.HitPart].Velocity)
+                    MainEvent:FireServer(Argument, predictedPos)
+                end
+            end)
+        end
+    end)
+end
+
+Client.CharacterAdded:Connect(function(newchar)
+Character = newchar
+CharAdded()
+end)
+
+CharAdded()
