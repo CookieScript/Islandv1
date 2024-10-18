@@ -1,1 +1,105 @@
--- test
+local P1000ToggleKey = "x" -- Change that to whatever keybind: "x"
+
+
+--[[
+
+	Standing still will trick the hitbox, you won't be able to get hit.
+
+
+	DO NOT EDIT IF YOU DONT KNOW WHAT IS GOING ON...
+
+  MAKES YOU LAGGY FOR THE NULL THAT IS HAPPING SO MAKE SURE YOU GET ANTI LAG
+
+
+--]]
+
+
+--// Services
+checkcaller = checkcaller
+newcclosure = newcclosure
+hookmetamethod = hookmetamethod
+
+local PastedSources = false
+local BruhXD = game:GetService("RunService")
+local LocalPlayer = game:GetService("Players").LocalPlayer
+local Bullshit = LocalPlayer:GetMouse()
+
+
+--// Toggles
+Bullshit.KeyDown:Connect(function(SayNoToOblivity)
+	if SayNoToOblivity == string.lower(P1000ToggleKey) then
+		pcall(function()
+			if PastedSources == false then
+				PastedSources = true
+				game.StarterGui:SetCore("SendNotification", {
+                                Title = "Notification",
+                                Text = "Desync: On" })
+			elseif PastedSources == true then
+				PastedSources = false
+				game.StarterGui:SetCore("SendNotification", {
+                                Title = "Notification",
+                                Text = "Desync: Off" })
+			end
+		end)
+	end
+end)
+
+Bullshit.KeyDown:Connect(function(SayNoToOblivity)
+	if SayNoToOblivity == ("=") then
+		game:GetService("TeleportService"):Teleport(game.PlaceId, LocalPlayer) 
+	end
+end)
+
+
+--// Desync_Source
+function RandomNumberRange(a)
+	return math.random(-a * 100, a * 100) / 100
+end
+
+function RandomVectorRange(a, b, c)
+	return Vector3.new(RandomNumberRange(a), RandomNumberRange(b), RandomNumberRange(c))
+end
+
+
+local DesyncTypes = {}
+BruhXD.Heartbeat:Connect(function()
+    if PastedSources == true then
+        DesyncTypes[1] = LocalPlayer.Character.HumanoidRootPart.CFrame
+        DesyncTypes[2] = LocalPlayer.Character.HumanoidRootPart.AssemblyLinearVelocity
+
+        local time = tick() -- Get the current time
+        local noisePattern = Vector3.new(
+            (math.random() * 500 - 250) * (math.sin(time * 100) * 0.6),
+            (math.random() * 500 - 250) * (math.cos(time * 100) * 0.6),
+            (math.random() * 250 - 125) * (math.sin(time * 200) * 0.6)
+        )
+
+        SpoofThis = LocalPlayer.Character.HumanoidRootPart.CFrame * CFrame.new(noisePattern)
+
+        LocalPlayer.Character.HumanoidRootPart.CFrame = SpoofThis
+        LocalPlayer.Character.HumanoidRootPart.AssemblyLinearVelocity = Vector3.new(1, 1, 1) * 99999999999999999999999999999999999999
+
+        BruhXD.RenderStepped:Wait()
+
+        LocalPlayer.Character.HumanoidRootPart.CFrame = DesyncTypes[1]
+        LocalPlayer.Character.HumanoidRootPart.AssemblyLinearVelocity = DesyncTypes[2]
+    end
+end)
+
+
+--// Hook_CFrame
+local XDDDDDD = nil
+XDDDDDD = hookmetamethod(game, "__index", newcclosure(function(self, key)
+	if PastedSources == true then
+		if not checkcaller() then
+			if key == "CFrame" and PastedSources == true and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") and LocalPlayer.Character:FindFirstChild("Humanoid") and LocalPlayer.Character:FindFirstChild("Humanoid").Health > 0 then
+				if self == LocalPlayer.Character.HumanoidRootPart then
+					return DesyncTypes[1] or CFrame.new()
+				elseif self == LocalPlayer.Character.Head then
+					return DesyncTypes[1] and DesyncTypes[1] + Vector3.new(0, LocalPlayer.Character.HumanoidRootPart.Size / 2 + 0.5, 0) or CFrame.new()
+				end
+			end
+		end
+	end
+	return XDDDDDD(self, key)
+end))
